@@ -1,0 +1,48 @@
+    public static void attachPDFSync(List<Id> listCreaPDF){
+        system.debug('AccountsController.attachPDF --- Start');
+        
+        List<ContentVersion> cntVersion = new List<ContentVersion>();
+        List<ContentDocumentLink> cntDocLink = new List<ContentDocumentLink>();
+        List<Document__c> docList = new List<Document__c>();
+        Map<Id, ID > accDoc= new Map<Id,Id>();
+        
+        for(Account acc : [Select id ,Name ,(Select id, Name, DocumentTypeNameFormula__c from Documenti__r where DocumentTypeNameFormula__c = 'Analisi Coface' )from Account where id in : listCreaPDF ]){
+            Id docId = acc.Documenti__r[0].Id;
+            accDoc.put(acc.Id, docId );   
+        }
+        
+        for(Id accId : listCreaPDF){
+            PageReference pdfPage = Page.AccountPDF; 
+            pdfPage.getParameters().put('id', accId);
+            if(!Test.isRunningTest()){ 
+                Blob pdfContent = pdfPage.getContentAsPdf();
+                
+                ContentVersion cVersion = new ContentVersion();
+                cVersion.ContentLocation = 'S';
+                cVersion.PathOnClient = 'Analisi Coface.pdf';
+                cVersion.Origin = 'H';
+                cVersion.Title = 'Analisi Coface.pdf';
+                cVersion.VersionData = pdfContent;
+                if(accDoc.get(accId) !=null) {
+                    cVersion.Description=accDoc.get(accId);
+                    
+                    cntVersion.add(cVersion);
+                }
+            }
+        }
+        insert cntVersion;
+        
+        for(ContentVersion c : [SELECT Id, ContentDocumentId, VersionData, Description, Title FROM ContentVersion WHERE Id IN:cntVersion]){ 
+            Document__c doc = new Document__c();
+            doc.id=c.Description;
+            doc.Id_File__c=c.ContentDocumentId;
+            doc.Url_Servizio_Esterno__c=c.Title;
+            Datetime uploadDate = Datetime.now();
+            doc.Data_Caricamento__c = uploadDate;
+            doc.Verifica_Sales_Support__c='Verifica OK';
+            docList.add(doc);
+        }
+        update docList;
+        
+        system.debug('AccountsController.attachPDF --- End docList '+docList);
+    }
